@@ -15,6 +15,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // file:// から localhost 上のローカルLLMサーバーへ fetch するためCORSを無効化する。
+      // このウィンドウは自アプリの index.html しか読み込まないため、リモートの信頼できないコンテンツを
+      // 実行するリスクはない。
+      webSecurity: false,
     },
   });
 
