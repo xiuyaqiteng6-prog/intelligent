@@ -1,0 +1,38 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
+    paths:
+      - "electron/**"
+      - "js/**"
+      - "css/**"
+      - "icons/**"
+      - "index.html"
+      - "manifest.webmanifest"
+      - "sw.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm run build:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOOS-windows
+          path: dist/*.exe
+          if-no-files-found: error
