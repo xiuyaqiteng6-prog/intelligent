@@ -25,7 +25,7 @@
     <div id="stat-bars"></div>
     <div class="topbar-actions">
       <div id="focus-display" title="集中力ポイント">◆ 0</div>
-      <button id="btn-menu" aria-label="メニュー">⋯</button>
+      <button id="btn-menu" aria-label="設定">⋯</button>
     </div>
   </header>
 
@@ -82,10 +82,13 @@
       </section>
 
       <section id="panel-chat" class="panel" hidden>
-        <h2>対話する</h2>
+        <div class="chat-panel-head">
+          <h2>対話する</h2>
+          <button id="llm-status" type="button" class="llm-status-badge" title="クリックでローカルLLM設定を開く">⚪ テンプレート応答</button>
+        </div>
         <div id="chat-log" class="chat-log"></div>
         <form id="chat-form" class="chat-form">
-          <input id="chat-input" type="text" placeholder="話しかけてみよう…" autocomplete="off" maxlength="120" />
+          <input id="chat-input" type="text" placeholder="話しかけてみよう…" autocomplete="off" maxlength="200" />
           <button type="submit">送信</button>
         </form>
       </section>
@@ -134,6 +137,43 @@
     <h2 id="evolve-title"></h2>
     <p id="evolve-sub"></p>
     <button id="btn-evolve-close" class="btn-primary">続ける</button>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay" hidden>
+  <div class="modal-card settings-card">
+    <p class="event-eyebrow">設定</p>
+    <h2>ローカルLLM接続</h2>
+    <p class="modal-copy">Ollama や LM Studio など、お使いのPCで動いているローカルLLM(OpenAI互換API)に接続すると、対話の応答がテンプレートではなくLLM生成になります。何も設定しなければ、従来通りテンプレート応答で遊べます。</p>
+
+    <label class="field-label toggle-row">
+      <input id="llm-enabled" type="checkbox" />
+      <span>ローカルLLMを使う</span>
+    </label>
+
+    <label class="field-label" for="llm-baseurl">ベースURL</label>
+    <input id="llm-baseurl" type="text" placeholder="http://localhost:11434/v1" />
+    <p class="field-hint">Ollama既定値: <code>http://localhost:11434/v1</code> ・ LM Studio既定値: <code>http://localhost:1234/v1</code></p>
+
+    <label class="field-label" for="llm-model">モデル名</label>
+    <input id="llm-model" type="text" placeholder="例: llama3.1 / gemma2 など" />
+
+    <label class="field-label" for="llm-apikey">APIキー(不要な場合が多い・任意)</label>
+    <input id="llm-apikey" type="text" placeholder="未設定でOKなサーバーが多い" />
+
+    <div class="settings-actions">
+      <button id="btn-llm-test" type="button" class="btn-secondary">接続テスト</button>
+      <span id="llm-test-result" class="llm-test-result"></span>
+    </div>
+
+    <p class="field-hint settings-note">
+      ブラウザから直接ローカルサーバーへ接続するには CORS 許可が必要です。Ollama の場合は起動前に環境変数
+      <code>OLLAMA_ORIGINS=*</code> を設定してください。Electron版(Windows版アプリ)ではこの制限はありません。
+    </p>
+
+    <div class="settings-actions">
+      <button id="btn-settings-close" class="btn-primary">保存して閉じる</button>
+    </div>
   </div>
 </div>
 

@@ -191,6 +191,17 @@ button { font-family: inherit; }
 .feed-card .info .stat { font-size: 11px; color: var(--text-muted); }
 .feed-card .cost { font-size: 11px; color: var(--accent); white-space: nowrap; }
 
+.chat-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.chat-panel-head h2 { margin: 0; }
+.llm-status-badge {
+  font-size: 10px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--text-muted); cursor: pointer; white-space: nowrap;
+}
+.llm-status-badge.on { color: #4fdc9a; border-color: #4fdc9a; }
+.llm-status-badge.error { color: var(--danger); border-color: var(--danger); }
+
+.chat-msg.thinking { color: var(--text-muted); font-style: italic; }
+
 .chat-log {
   height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
   padding: 4px 2px 10px; margin-bottom: 10px;
@@ -285,6 +296,26 @@ button { font-family: inherit; }
 .event-choice-btn:hover { border-color: var(--accent); }
 .evolve-card { text-align: center; }
 #evolve-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+
+.settings-card #name-input, .settings-card input[type="text"] {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 4px;
+}
+.settings-card input[type="text"]:focus { border-color: var(--accent); }
+.toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px; }
+.toggle-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.field-hint { font-size: 11px; color: var(--text-muted); margin: 2px 0 14px; line-height: 1.6; }
+.field-hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+.settings-note { margin-top: 4px; }
+.settings-actions { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+.btn-secondary {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  padding: 9px 14px; border-radius: 10px; font-size: 13px; cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--accent); }
+.llm-test-result { font-size: 12px; color: var(--text-muted); }
+.llm-test-result.ok { color: #4fdc9a; }
+.llm-test-result.fail { color: var(--danger); }
 
 /* ---------- Responsive: mobile ---------- */
 @media (max-width: 860px) {

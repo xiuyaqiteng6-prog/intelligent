@@ -1,0 +1,46 @@
+{
+  "name": "noos",
+  "productName": "NOOS",
+  "version": "1.0.0",
+  "description": "仮想知性育成シミュレーター — Obsidian風の知識グラフの中でAIを育てるゲーム",
+  "author": "NOOS",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:win:dir": "electron-builder --win --x64 --dir",
+    "build:linux": "electron-builder --linux --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.noos.app",
+    "productName": "NOOS",
+    "files": [
+      "index.html",
+      "manifest.webmanifest",
+      "sw.js",
+      "css/**/*",
+      "js/**/*",
+      "icons/**/*",
+      "electron/**/*",
+      "!node_modules",
+      "!electron/**/*.map"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "icons/icon.ico"
+    },
+    "linux": {
+      "target": ["dir"]
+    }
+  }
+}

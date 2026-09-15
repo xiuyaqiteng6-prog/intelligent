@@ -7,6 +7,10 @@ import {
 } from './state.js';
 import { generateReply } from './dialogue.js';
 import { resolveEvent } from './events.js';
+import {
+  DEFAULT_LLM_SETTINGS, loadLLMSettings, saveLLMSettings,
+  generateLLMReply, testLLMConnection, describeError,
+} from './llm.js';
 
 const STAT_META = [
   { key: 'logic', label: '論理', color: 'var(--c-logic)' },
@@ -82,7 +86,10 @@ export class UI {
       this.updateActionActiveState();
     };
 
+    this.llmSettings = loadLLMSettings();
+
     this._bindStatic();
+    this._bindSettings();
   }
 
   markChanged() {
@@ -116,23 +123,120 @@ export class UI {
 
     $('chat-form').addEventListener('submit', (e) => {
       e.preventDefault();
-      const input = $('chat-input');
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = '';
-      this.state.chatHistory.push({ role: 'user', text, at: Date.now() });
-      this.state.stats.bond = Math.min(100, this.state.stats.bond + 1);
-      this.renderChatLog();
+      this.handleChatSubmit();
+    });
+  }
+
+  async handleChatSubmit() {
+    const input = $('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    this.state.chatHistory.push({ role: 'user', text, at: Date.now() });
+    this.state.stats.bond = Math.min(100, this.state.stats.bond + 1);
+    this.renderChatLog();
+    this.markChanged();
+
+    if (this.llmSettings.enabled) {
+      this.showThinking(true);
+      try {
+        const reply = await generateLLMReply(this.state, this.llmSettings);
+        this.pushAIReply(reply);
+        this.setLLMStatus('on');
+      } catch (err) {
+        const fallback = generateReply(this.state, text);
+        this.pushAIReply(fallback);
+        this.setLLMStatus('error', describeError(err));
+      } finally {
+        this.showThinking(false);
+      }
+    } else {
       window.setTimeout(() => {
         const reply = generateReply(this.state, text);
-        this.state.chatHistory.push({ role: 'ai', text: reply, at: Date.now() });
-        this.state.chatHistory = this.state.chatHistory.slice(-60);
-        this.renderChatLog();
-        this.renderTopbar();
-        this.markChanged();
+        this.pushAIReply(reply);
       }, 420 + Math.random() * 380);
-      this.markChanged();
+    }
+  }
+
+  pushAIReply(text) {
+    this.state.chatHistory.push({ role: 'ai', text, at: Date.now() });
+    this.state.chatHistory = this.state.chatHistory.slice(-60);
+    this.renderChatLog();
+    this.renderTopbar();
+    this.markChanged();
+  }
+
+  showThinking(on) {
+    const log = $('chat-log');
+    let bubble = document.getElementById('chat-thinking-bubble');
+    if (on) {
+      if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.id = 'chat-thinking-bubble';
+        bubble.className = 'chat-msg from-ai thinking';
+        bubble.textContent = '考えている…';
+        log.appendChild(bubble);
+      }
+      log.scrollTop = log.scrollHeight;
+    } else if (bubble) {
+      bubble.remove();
+    }
+  }
+
+  // ---------------- ローカルLLM設定 ----------------
+  _bindSettings() {
+    const openModal = () => {
+      $('llm-enabled').checked = this.llmSettings.enabled;
+      $('llm-baseurl').value = this.llmSettings.baseUrl;
+      $('llm-model').value = this.llmSettings.model;
+      $('llm-apikey').value = this.llmSettings.apiKey;
+      $('llm-test-result').textContent = '';
+      $('llm-test-result').className = 'llm-test-result';
+      $('settings-modal').hidden = false;
+    };
+    $('btn-menu').addEventListener('click', openModal);
+    $('llm-status').addEventListener('click', openModal);
+
+    const persist = () => {
+      this.llmSettings = {
+        enabled: $('llm-enabled').checked,
+        baseUrl: $('llm-baseurl').value.trim() || DEFAULT_LLM_SETTINGS.baseUrl,
+        model: $('llm-model').value.trim(),
+        apiKey: $('llm-apikey').value.trim(),
+      };
+      saveLLMSettings(this.llmSettings);
+      this.setLLMStatus(this.llmSettings.enabled ? 'on' : 'off');
+    };
+
+    $('btn-settings-close').addEventListener('click', () => {
+      persist();
+      $('settings-modal').hidden = true;
     });
+
+    $('btn-llm-test').addEventListener('click', async () => {
+      const testSettings = {
+        baseUrl: $('llm-baseurl').value.trim(),
+        model: $('llm-model').value.trim(),
+        apiKey: $('llm-apikey').value.trim(),
+      };
+      const resultEl = $('llm-test-result');
+      resultEl.textContent = '接続テスト中…';
+      resultEl.className = 'llm-test-result';
+      const res = await testLLMConnection(testSettings);
+      resultEl.textContent = res.message;
+      resultEl.className = 'llm-test-result ' + (res.ok ? 'ok' : 'fail');
+    });
+
+    this.setLLMStatus(this.llmSettings.enabled ? 'on' : 'off');
+  }
+
+  setLLMStatus(kind) {
+    const badge = $('llm-status');
+    if (!badge) return;
+    badge.classList.remove('on', 'error');
+    if (kind === 'on') { badge.classList.add('on'); badge.textContent = '🟢 ローカルLLM接続中'; }
+    else if (kind === 'error') { badge.classList.add('error'); badge.textContent = '🔴 接続失敗(テンプレートで応答)'; }
+    else { badge.textContent = '⚪ テンプレート応答'; }
   }
 
   setMobileView(view) {
