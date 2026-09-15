@@ -220,7 +220,7 @@ export class UI {
         apiKey: $('llm-apikey').value.trim(),
       };
       const resultEl = $('llm-test-result');
-      resultEl.textContent = '接続テスト中…';
+      resultEl.textContent = '接続テスト中…(モデル初回読み込み時は1分近くかかることがあります)';
       resultEl.className = 'llm-test-result';
       const res = await testLLMConnection(testSettings);
       resultEl.textContent = res.message;

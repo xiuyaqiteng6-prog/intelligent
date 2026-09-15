@@ -106,7 +106,7 @@ async function chatCompletion(settings, messages, { timeoutMs = 20000 } = {}) {
 
 export async function generateLLMReply(state, settings) {
   const messages = buildMessages(state);
-  return chatCompletion(settings, messages, { timeoutMs: 25000 });
+  return chatCompletion(settings, messages, { timeoutMs: 90000 });
 }
 
 export async function testLLMConnection(settings) {
@@ -117,7 +117,7 @@ export async function testLLMConnection(settings) {
         { role: 'system', content: 'あなたは接続テスト用のアシスタントです。' },
         { role: 'user', content: '「接続成功」とだけ日本語で返してください。' },
       ],
-      { timeoutMs: 12000 },
+      { timeoutMs: 45000 },
     );
     return { ok: true, message: `接続に成功しました: 「${reply.slice(0, 40)}」` };
   } catch (e) {
@@ -126,7 +126,9 @@ export async function testLLMConnection(settings) {
 }
 
 export function describeError(e) {
-  if (e?.name === 'AbortError') return 'タイムアウトしました。サーバーが起動しているか確認してください。';
+  if (e?.name === 'AbortError') {
+    return 'タイムアウトしました。初回はモデルの読み込みに時間がかかることがあるので、もう一度試してください。改善しない場合はサーバーが起動しているか、モデル名が合っているか確認してください。';
+  }
   const msg = e?.message || String(e);
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
     return '接続できません。サーバーの起動状況、URL、CORS設定(OLLAMA_ORIGINSなど)を確認してください。';
