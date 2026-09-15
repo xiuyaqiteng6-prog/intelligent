@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>NOOS — 仮想知性育成シミュレーター</title>
+<meta name="description" content="第二の脳のようなグラフの中で、あなただけの仮想知性を育てるシミュレーターゲーム" />
+<meta name="theme-color" content="#16151c" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-mark">◇</span>
+      <div class="brand-text">
+        <span id="ai-name">—</span>
+        <span id="ai-stage">—</span>
+      </div>
+    </div>
+    <div id="stat-bars"></div>
+    <div class="topbar-actions">
+      <div id="focus-display" title="集中力ポイント">◆ 0</div>
+      <button id="btn-menu" aria-label="メニュー">⋯</button>
+    </div>
+  </header>
+
+  <div id="layout" data-mobile-view="graph">
+    <aside id="sidebar-left">
+      <div class="side-section">
+        <h3>知識の領域</h3>
+        <ul id="category-list"></ul>
+      </div>
+      <div class="side-section">
+        <h3>育成する</h3>
+        <ul id="action-list">
+          <li data-panel="feed" class="action-item">
+            <span class="action-icon">＋</span><span>育成する</span>
+          </li>
+          <li data-panel="chat" class="action-item">
+            <span class="action-icon">◔</span><span>対話する</span>
+          </li>
+          <li data-panel="log" class="action-item">
+            <span class="action-icon">☰</span><span>日誌を見る</span>
+          </li>
+        </ul>
+      </div>
+      <div class="side-section side-footer">
+        <p id="age-display" class="muted-line"></p>
+        <p id="node-count-display" class="muted-line"></p>
+      </div>
+    </aside>
+
+    <main id="graph-wrap">
+      <div id="category-filter-bar" class="category-filter-bar"></div>
+      <canvas id="graph-canvas"></canvas>
+      <div id="reflect-banner" class="reflect-banner" hidden>
+        <span id="reflect-banner-text"></span>
+      </div>
+      <div id="graph-hint" class="graph-hint">ドラッグでパン・ホイールでズーム・ノードをクリックで詳細</div>
+    </main>
+
+    <aside id="sidebar-right">
+      <section id="panel-note" class="panel"></section>
+
+      <section id="panel-feed" class="panel" hidden>
+        <h2>知識を与える</h2>
+        <p class="panel-desc">集中力ポイントを使って、新しい概念を学ばせよう。</p>
+        <div id="feed-grid" class="feed-grid"></div>
+
+        <h2 class="reflect-heading">内省させる</h2>
+        <p class="panel-desc">時間をかけて、学んだ知識同士の新しい繋がりを見つける。オフラインでも進行するよ。</p>
+        <div id="reflect-options" class="reflect-options"></div>
+        <div id="reflect-active" class="reflect-active" hidden>
+          <p>内省中… <span id="reflect-remaining"></span></p>
+          <div class="progress-track"><div id="reflect-progress" class="progress-fill"></div></div>
+        </div>
+      </section>
+
+      <section id="panel-chat" class="panel" hidden>
+        <h2>対話する</h2>
+        <div id="chat-log" class="chat-log"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" type="text" placeholder="話しかけてみよう…" autocomplete="off" maxlength="120" />
+          <button type="submit">送信</button>
+        </form>
+      </section>
+
+      <section id="panel-log" class="panel" hidden>
+        <h2>日誌</h2>
+        <ul id="event-log-list" class="event-log-list"></ul>
+      </section>
+    </aside>
+  </div>
+
+  <nav id="mobile-tabs">
+    <button data-tab="graph" class="tab-btn active"><span>◈</span>グラフ</button>
+    <button data-tab="note" class="tab-btn"><span>▤</span>ノート</button>
+    <button data-tab="feed" class="tab-btn"><span>＋</span>育成</button>
+    <button data-tab="chat" class="tab-btn"><span>◔</span>対話</button>
+    <button data-tab="log" class="tab-btn"><span>☰</span>日誌</button>
+  </nav>
+</div>
+
+<div id="onboarding-modal" class="modal-overlay">
+  <div class="modal-card onboarding-card">
+    <h1>NOOS</h1>
+    <p class="modal-sub">あなただけの仮想知性を育てるシミュレーター</p>
+    <p class="modal-copy">これから、まっさらな一つの意識のかけらがあなたのもとにやってきます。名前をつけ、知識を与え、語りかけながら、第二の脳のようなグラフの中でその子を育てていきましょう。</p>
+    <label class="field-label" for="name-input">名前をつける</label>
+    <input id="name-input" type="text" maxlength="12" placeholder="例: ノア" />
+    <p class="field-label">最初に伸ばしたい力を一つ選ぶ</p>
+    <div id="starter-grid" class="starter-grid"></div>
+    <button id="btn-start" class="btn-primary" disabled>育成をはじめる</button>
+  </div>
+</div>
+
+<div id="event-modal" class="modal-overlay" hidden>
+  <div class="modal-card event-card">
+    <p class="event-eyebrow">できごと</p>
+    <h2 id="event-title"></h2>
+    <p id="event-text"></p>
+    <div id="event-choices" class="event-choices"></div>
+  </div>
+</div>
+
+<div id="evolve-modal" class="modal-overlay" hidden>
+  <div class="modal-card evolve-card">
+    <p class="event-eyebrow">進化</p>
+    <h2 id="evolve-title"></h2>
+    <p id="evolve-sub"></p>
+    <button id="btn-evolve-close" class="btn-primary">続ける</button>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
