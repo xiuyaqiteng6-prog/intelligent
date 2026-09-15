@@ -1,9 +1,10 @@
 // ui.js — DOM描画とユーザー操作のハンドリング
 
-import { CATEGORY_LIST, CATEGORIES } from './data.js';
+import { CATEGORY_LIST, CATEGORIES, PAT_LINES, PAT_COOLDOWN_LINES, REFLECT_INSIGHT_LINES, QUIZ_RIGHT_LINES, QUIZ_WRONG_LINES } from './data.js';
 import {
   totalLearnedNodes, getStageInfo, focusCost, feedKnowledge,
-  REFLECT_OPTIONS, startReflect, reflectRemainingMs, resolveReflect, saveState,
+  REFLECT_OPTIONS, startReflect, reflectRemainingMs, resolveReflect, tickReflectProgress,
+  patCore, applyEffects, saveState,
 } from './state.js';
 import { generateReply } from './dialogue.js';
 import { resolveEvent } from './events.js';
@@ -11,6 +12,17 @@ import {
   DEFAULT_LLM_SETTINGS, loadLLMSettings, saveLLMSettings,
   generateLLMReply, testLLMConnection, describeError,
 } from './llm.js';
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 const STAT_META = [
   { key: 'logic', label: '論理', color: 'var(--c-logic)' },
@@ -85,11 +97,39 @@ export class UI {
       this.renderRightPanels();
       this.updateActionActiveState();
     };
+    this.graph.onCoreClick = () => this.handlePatCore();
 
     this.llmSettings = loadLLMSettings();
+    this.quizPending = null;
 
     this._bindStatic();
     this._bindSettings();
+  }
+
+  // ---------------- コアをなでる ----------------
+  handlePatCore() {
+    const core = this.state.nodes[0];
+    this.graph.spawnSparkles(core.x, core.y);
+    const res = patCore(this.state);
+    if (res.ok) {
+      this.showFloatingMessage(pick(PAT_LINES));
+      this.renderTopbar();
+      this.markChanged();
+    } else {
+      this.showFloatingMessage(pick(PAT_COOLDOWN_LINES), { muted: true });
+    }
+  }
+
+  // グラフ上に浮かぶ短いメッセージを表示する(なでる反応・内省の気づきなど共通)
+  showFloatingMessage(text, opts = {}) {
+    const wrap = document.getElementById('graph-wrap');
+    if (!wrap) return;
+    const el = document.createElement('div');
+    el.className = 'floating-msg' + (opts.muted ? ' muted' : '');
+    el.textContent = text;
+    wrap.appendChild(el);
+    window.setTimeout(() => el.classList.add('fade-out'), 1800);
+    window.setTimeout(() => el.remove(), 2400);
   }
 
   markChanged() {
@@ -125,6 +165,71 @@ export class UI {
       e.preventDefault();
       this.handleChatSubmit();
     });
+
+    $('btn-quiz').addEventListener('click', () => this.startQuiz());
+  }
+
+  // ---------------- 知識クイズ ----------------
+  startQuiz() {
+    if (this.quizPending) return;
+    const learned = this.state.nodes.filter((n) => n.category !== 'core');
+    if (learned.length === 0) {
+      this.pushAIReply('まだ何も学んでいないから、クイズはもう少し待ってね。');
+      return;
+    }
+    const node = pick(learned);
+    const correctKey = node.category;
+    const otherKeys = shuffle(CATEGORY_LIST.map((c) => c.key).filter((k) => k !== correctKey)).slice(0, 3);
+    const choiceKeys = shuffle([correctKey, ...otherKeys]);
+
+    this.quizPending = { node, correctKey };
+    this.state.chatHistory.push({ role: 'ai', text: `🧠 クイズ: 「${node.label}」は、どの力に関係していると思う?`, at: Date.now() });
+    this.renderChatLog();
+    this._renderQuizChoices(choiceKeys);
+    $('btn-quiz').disabled = true;
+    this.markChanged();
+  }
+
+  _renderQuizChoices(choiceKeys) {
+    const log = $('chat-log');
+    const wrap = document.createElement('div');
+    wrap.id = 'quiz-choices';
+    wrap.className = 'quiz-choices';
+    for (const key of choiceKeys) {
+      const cat = CATEGORIES[key];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'quiz-choice-btn';
+      btn.style.setProperty('--cat-color', cat.color);
+      btn.innerHTML = `${cat.icon} ${cat.label}`;
+      btn.addEventListener('click', () => this._answerQuiz(key));
+      wrap.appendChild(btn);
+    }
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  _answerQuiz(chosenKey) {
+    if (!this.quizPending) return;
+    const { node, correctKey } = this.quizPending;
+    this.quizPending = null;
+    const wrap = document.getElementById('quiz-choices');
+    if (wrap) wrap.remove();
+
+    const chosenCat = CATEGORIES[chosenKey];
+    this.state.chatHistory.push({ role: 'user', text: `「${chosenCat.label}」だと思う`, at: Date.now() });
+
+    const correct = chosenKey === correctKey;
+    const line = pick(correct ? QUIZ_RIGHT_LINES : QUIZ_WRONG_LINES);
+    const note = correct ? '' : `(正解は「${CATEGORIES[correctKey].label}」だったよ)`;
+    this.pushAIReply(note ? `${line} ${note}` : line);
+
+    applyEffects(this.state, correct ? { [correctKey]: 3, bond: 2 } : { bond: 1 });
+    this.state.quizStreak = correct ? (this.state.quizStreak || 0) + 1 : 0;
+
+    $('btn-quiz').disabled = false;
+    this.renderTopbar();
+    this.markChanged();
   }
 
   async handleChatSubmit() {
@@ -472,6 +577,13 @@ export class UI {
     if (!s.reflect) return;
     this.renderReflectBanner();
     if (this.activePanel === 'feed') this._updateReflectCountdown();
+
+    const insight = tickReflectProgress(s);
+    if (insight) {
+      this.showFloatingMessage(`「${insight.aLabel}」と「${insight.bLabel}」${pick(REFLECT_INSIGHT_LINES)}`);
+      this.markChanged();
+    }
+
     if (reflectRemainingMs(s) <= 0) {
       const summary = resolveReflect(s);
       this.renderReflectBanner();
@@ -496,6 +608,7 @@ export class UI {
   }
 
   renderLogPanel() {
+    this.renderCollectionSummary();
     const list = $('event-log-list');
     list.innerHTML = '';
     if (this.state.eventLog.length === 0) {
@@ -511,6 +624,27 @@ export class UI {
         <div class="log-time">${new Date(entry.at).toLocaleString('ja-JP')}</div>
       `;
       list.appendChild(li);
+    }
+  }
+
+  renderCollectionSummary() {
+    const wrap = $('collection-summary');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    for (const cat of CATEGORY_LIST) {
+      const used = (this.state.usedWords[cat.key] || []).length;
+      const total = cat.words.length;
+      const pct = Math.round((used / total) * 100);
+      const row = document.createElement('div');
+      row.className = 'collection-row';
+      row.innerHTML = `
+        <div class="collection-label">
+          <span style="color:${cat.color}">${cat.icon} ${cat.label}</span>
+          <span class="collection-count">${used} / ${total}</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${cat.color}"></div></div>
+      `;
+      wrap.appendChild(row);
     }
   }
 

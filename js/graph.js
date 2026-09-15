@@ -17,6 +17,8 @@ export class GraphView {
     this.selectedId = 'core';
     this.filterCategory = null; // null = 全て
     this.onSelect = null;
+    this.onCoreClick = null;
+    this.particles = [];
 
     this._drag = null;
     this._pan = null;
@@ -67,6 +69,7 @@ export class GraphView {
         if (hit && hit.id === this._drag.id) {
           this.selectedId = hit.id;
           if (this.onSelect) this.onSelect(hit.id);
+          if (hit.id === 'core' && this.onCoreClick) this.onCoreClick();
         }
       }
       this._drag = null;
@@ -122,8 +125,35 @@ export class GraphView {
     if (n) { this.camera.x = n.x; this.camera.y = n.y; }
   }
 
+  // なでた時などに呼ぶキラキラ演出
+  spawnSparkles(worldX, worldY, count = 14) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 20 + Math.random() * 50;
+      this.particles.push({
+        x: worldX, y: worldY,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0, maxLife: 0.6 + Math.random() * 0.5,
+        size: 2 + Math.random() * 2.5,
+      });
+    }
+  }
+
+  _stepParticles(dtSeconds) {
+    if (this.particles.length === 0) return;
+    for (const p of this.particles) {
+      p.life += dtSeconds;
+      p.x += p.vx * dtSeconds;
+      p.y += p.vy * dtSeconds;
+      p.vx *= 0.94;
+      p.vy *= 0.94;
+    }
+    this.particles = this.particles.filter((p) => p.life < p.maxLife);
+  }
+
   // --- 物理シミュレーション(簡易フォースレイアウト) ---
   step(dt) {
+    this._stepParticles(dt / 60);
     const nodes = this.state.nodes;
     const edges = this.state.edges;
     if (nodes.length < 2) return;
@@ -194,13 +224,21 @@ export class GraphView {
     ctx.translate(-this.camera.x, -this.camera.y);
 
     // エッジ
-    ctx.lineWidth = 1 / this.camera.scale;
+    const EDGE_HIGHLIGHT_MS = 2500;
     for (const e of this.state.edges) {
       const a = this.state.nodes.find((n) => n.id === e.a);
       const b = this.state.nodes.find((n) => n.id === e.b);
       if (!a || !b) continue;
-      const highlight = this.filterCategory && (a.category === this.filterCategory || b.category === this.filterCategory);
-      ctx.strokeStyle = highlight ? 'rgba(200,182,255,0.55)' : 'rgba(150,150,170,0.18)';
+      const age = e.addedAt ? Date.now() - e.addedAt : Infinity;
+      if (age < EDGE_HIGHLIGHT_MS) {
+        const fade = 1 - age / EDGE_HIGHLIGHT_MS;
+        ctx.lineWidth = (1 + fade * 2) / this.camera.scale;
+        ctx.strokeStyle = `rgba(201,182,255,${0.25 + fade * 0.65})`;
+      } else {
+        const highlight = this.filterCategory && (a.category === this.filterCategory || b.category === this.filterCategory);
+        ctx.lineWidth = 1 / this.camera.scale;
+        ctx.strokeStyle = highlight ? 'rgba(200,182,255,0.55)' : 'rgba(150,150,170,0.18)';
+      }
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -246,6 +284,17 @@ export class GraphView {
       }
       ctx.globalAlpha = 1;
     }
+
+    // パーティクル(なでた時のキラキラ)
+    for (const p of this.particles) {
+      const fade = 1 - p.life / p.maxLife;
+      ctx.globalAlpha = Math.max(0, fade);
+      ctx.fillStyle = '#e6d9ff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     ctx.restore();
     ctx.restore();

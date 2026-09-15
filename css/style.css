@@ -153,6 +153,21 @@ button { font-family: inherit; }
   padding: 4px 10px; border-radius: 999px; pointer-events: none; white-space: nowrap;
 }
 
+.floating-msg {
+  position: absolute; top: 18%; left: 50%; transform: translate(-50%, 0);
+  max-width: min(80%, 360px); text-align: center; font-size: 13px; line-height: 1.6;
+  background: rgba(30,29,38,0.92); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 16px; border-radius: 14px; z-index: 4; pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  animation: floatIn .25s ease-out;
+}
+.floating-msg.muted { color: var(--text-muted); border-color: var(--border); }
+.floating-msg.fade-out { opacity: 0; transform: translate(-50%, -8px); transition: opacity .6s ease, transform .6s ease; }
+@keyframes floatIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 .reflect-banner {
   position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
   background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
@@ -201,6 +216,24 @@ button { font-family: inherit; }
 .llm-status-badge.error { color: var(--danger); border-color: var(--danger); }
 
 .chat-msg.thinking { color: var(--text-muted); font-style: italic; }
+
+.quiz-launch-btn { margin-bottom: 10px; width: 100%; }
+
+.quiz-choices {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  align-self: stretch; margin: 2px 0 4px;
+}
+.quiz-choice-btn {
+  --cat-color: var(--accent);
+  padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--text); cursor: pointer; font-size: 13px; text-align: center;
+}
+.quiz-choice-btn:hover { border-color: var(--cat-color); color: var(--cat-color); }
+
+.collection-summary { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.collection-row { font-size: 12px; }
+.collection-label { display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--text); }
+.collection-count { color: var(--text-muted); }
 
 .chat-log {
   height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;

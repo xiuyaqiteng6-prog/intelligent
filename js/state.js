@@ -48,6 +48,8 @@ export function createNewState(name, starterCategory) {
     reflect: null, // { endsAt, ms }
     totalFed: 0,
     lastStage: 0,
+    lastPatAt: 0,
+    quizStreak: 0,
   };
 }
 
@@ -167,7 +169,11 @@ export function feedKnowledge(state, categoryKey) {
 
 export function startReflect(state, ms) {
   if (state.reflect) return { ok: false, reason: 'busy' };
-  state.reflect = { startedAt: Date.now(), endsAt: Date.now() + ms, ms };
+  const minutes = ms / 60_000;
+  const plannedEdges = Math.max(1, Math.round(minutes / 10));
+  state.reflect = {
+    startedAt: Date.now(), endsAt: Date.now() + ms, ms, plannedEdges, addedEdges: 0,
+  };
   return { ok: true };
 }
 
@@ -176,23 +182,50 @@ export function reflectRemainingMs(state) {
   return Math.max(0, state.reflect.endsAt - Date.now());
 }
 
-// reflect完了時に呼ぶ: 新しいエッジをいくつか生成し、bond/xpを付与
-export function resolveReflect(state) {
-  if (!state.reflect) return null;
-  const { ms } = state.reflect;
-  const minutes = ms / 60_000;
-  const edgesToAdd = Math.max(1, Math.round(minutes / 10));
-  let added = 0;
+// ランダムな未接続ペアを1組つなげる。繋がったノードのラベルを返す(繋げられなければnull)。
+function addRandomEdge(state) {
   const nodeIds = state.nodes.map((n) => n.id);
+  if (nodeIds.length < 3) return null;
   let attempts = 0;
-  while (added < edgesToAdd && attempts < edgesToAdd * 20 && nodeIds.length > 2) {
+  while (attempts < 40) {
     attempts++;
     const a = nodeIds[Math.floor(Math.random() * nodeIds.length)];
     const b = nodeIds[Math.floor(Math.random() * nodeIds.length)];
     if (a === b) continue;
     const exists = state.edges.some((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
     if (exists) continue;
-    state.edges.push({ a, b, strength: 1 });
+    const edge = { a, b, strength: 1, addedAt: Date.now() };
+    state.edges.push(edge);
+    const nodeA = state.nodes.find((n) => n.id === a);
+    const nodeB = state.nodes.find((n) => n.id === b);
+    return { edge, aLabel: nodeA?.label, bLabel: nodeB?.label };
+  }
+  return null;
+}
+
+// 内省中に少しずつ繋がりを生成する。main.jsの1秒ループから呼び出す。
+// 新しい繋がりが生まれたら {aLabel, bLabel} を返し、なければ null。
+export function tickReflectProgress(state) {
+  if (!state.reflect) return null;
+  const { startedAt, endsAt, plannedEdges, addedEdges = 0 } = state.reflect;
+  if (addedEdges >= plannedEdges) return null;
+  const span = Math.max(1, endsAt - startedAt);
+  const elapsedFrac = (Date.now() - startedAt) / span;
+  const expectedAdded = Math.floor(Math.min(1, elapsedFrac) * plannedEdges);
+  if (expectedAdded <= addedEdges) return null;
+  const result = addRandomEdge(state);
+  state.reflect.addedEdges = addedEdges + 1;
+  return result;
+}
+
+// reflect完了時に呼ぶ: 残っている分の繋がりを生成し、bond/フォーカスを付与
+export function resolveReflect(state) {
+  if (!state.reflect) return null;
+  const { ms, plannedEdges = 1, addedEdges = 0 } = state.reflect;
+  const minutes = ms / 60_000;
+  let added = addedEdges;
+  while (added < plannedEdges) {
+    if (!addRandomEdge(state)) break;
     added++;
   }
   const bondGain = Math.max(1, Math.round(minutes / 5));
@@ -202,4 +235,16 @@ export function resolveReflect(state) {
   const summary = { edgesAdded: added, bondGain, focusGain, minutes };
   state.reflect = null;
   return summary;
+}
+
+const PAT_COOLDOWN_MS = 4000;
+
+// コアをなでる。クールダウン中でも反応は返すが、報酬はクールダウン明け後のみ。
+export function patCore(state) {
+  const now = Date.now();
+  const onCooldown = now - (state.lastPatAt || 0) < PAT_COOLDOWN_MS;
+  if (onCooldown) return { ok: false, cooldown: true };
+  state.lastPatAt = now;
+  applyEffects(state, { bond: 1 });
+  return { ok: true };
 }

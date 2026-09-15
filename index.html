@@ -86,6 +86,7 @@
           <h2>対話する</h2>
           <button id="llm-status" type="button" class="llm-status-badge" title="クリックでローカルLLM設定を開く">⚪ テンプレート応答</button>
         </div>
+        <button id="btn-quiz" type="button" class="btn-secondary quiz-launch-btn">🧠 知識クイズを出して</button>
         <div id="chat-log" class="chat-log"></div>
         <form id="chat-form" class="chat-form">
           <input id="chat-input" type="text" placeholder="話しかけてみよう…" autocomplete="off" maxlength="200" />
@@ -94,7 +95,9 @@
       </section>
 
       <section id="panel-log" class="panel" hidden>
-        <h2>日誌</h2>
+        <h2>収集状況</h2>
+        <div id="collection-summary" class="collection-summary"></div>
+        <h2 class="reflect-heading">日誌</h2>
         <ul id="event-log-list" class="event-log-list"></ul>
       </section>
     </aside>
