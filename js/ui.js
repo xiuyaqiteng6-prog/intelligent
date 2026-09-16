@@ -4,7 +4,7 @@ import { CATEGORY_LIST, CATEGORIES, PAT_LINES, PAT_COOLDOWN_LINES, REFLECT_INSIG
 import {
   totalLearnedNodes, getStageInfo, focusCost, feedKnowledge,
   REFLECT_OPTIONS, startReflect, reflectRemainingMs, resolveReflect, tickReflectProgress,
-  patCore, applyEffects, saveState,
+  patCore, applyEffects, saveState, claimReflectSpark,
 } from './state.js';
 import { generateReply } from './dialogue.js';
 import { resolveEvent } from './events.js';
@@ -556,8 +556,10 @@ export class UI {
     const pct = Math.min(100, ((total - remaining) / total) * 100);
     const remainEl = $('reflect-remaining');
     const fillEl = $('reflect-progress');
+    const sparksEl = $('reflect-sparks');
     if (remainEl) remainEl.textContent = formatDuration(remaining);
     if (fillEl) fillEl.style.width = `${pct}%`;
+    if (sparksEl) sparksEl.textContent = String(s.reflect.sparksClaimed || 0);
   }
 
   renderReflectBanner() {
@@ -565,10 +567,50 @@ export class UI {
     const banner = $('reflect-banner');
     if (s.reflect) {
       banner.hidden = false;
-      $('reflect-banner-text').textContent = `内省中 · 残り ${formatDuration(reflectRemainingMs(s))}`;
+      $('reflect-banner-text').textContent = `内省中 · 光る粒をタップ · 残り ${formatDuration(reflectRemainingMs(s))}`;
     } else {
       banner.hidden = true;
     }
+  }
+
+  // 内省中、画面に浮かぶクリック可能な「気づきの粒」を出す(内省ミニゲーム)
+  spawnReflectSpark() {
+    const wrap = document.getElementById('graph-wrap');
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const marginX = 50, marginTop = 90, marginBottom = 60;
+    const w = Math.max(1, rect.width - marginX * 2);
+    const h = Math.max(1, rect.height - marginTop - marginBottom);
+    const x = marginX + Math.random() * w;
+    const y = marginTop + Math.random() * h;
+
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'insight-spark';
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.title = '気づきの粒 — タップして捕まえよう';
+    let claimed = false;
+    const lifeTimer = window.setTimeout(() => el.remove(), 3200);
+    el.addEventListener('click', () => {
+      if (claimed) return;
+      claimed = true;
+      window.clearTimeout(lifeTimer);
+      el.classList.add('claimed');
+      window.setTimeout(() => el.remove(), 260);
+
+      const reward = claimReflectSpark(this.state);
+      if (reward) {
+        const msg = reward.pair
+          ? `気づきをキャッチ!「${reward.pair.aLabel}」と「${reward.pair.bLabel}」が繋がった`
+          : '気づきをキャッチ!集中力が回復した。';
+        this.showFloatingMessage(msg);
+        if (this.activePanel === 'feed') this._updateReflectCountdown();
+        this.renderTopbar();
+        this.markChanged();
+      }
+    });
+    wrap.appendChild(el);
   }
 
   // reflect完了チェック(main.jsのループから毎秒呼ばれる)
@@ -586,6 +628,7 @@ export class UI {
 
     if (reflectRemainingMs(s) <= 0) {
       const summary = resolveReflect(s);
+      document.querySelectorAll('.insight-spark').forEach((el) => el.remove());
       this.renderReflectBanner();
       this.renderTopbar();
       if (this.activePanel === 'feed') this.renderReflectPanel();

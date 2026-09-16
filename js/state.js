@@ -170,9 +170,13 @@ export function feedKnowledge(state, categoryKey) {
 export function startReflect(state, ms) {
   if (state.reflect) return { ok: false, reason: 'busy' };
   const minutes = ms / 60_000;
-  const plannedEdges = Math.max(1, Math.round(minutes / 10));
+  // 何もしなくても最低限は進む「基礎分」。ここを控えめにし、差分は気づきの粒(ミニゲーム)で稼ぐ設計にする。
+  const plannedEdges = Math.max(1, Math.round(minutes / 16));
+  const now = Date.now();
   state.reflect = {
-    startedAt: Date.now(), endsAt: Date.now() + ms, ms, plannedEdges, addedEdges: 0,
+    startedAt: now, endsAt: now + ms, ms, plannedEdges, addedEdges: 0,
+    nextSparkAt: now + randomBetween(1500, 3000),
+    sparksClaimed: 0,
   };
   return { ok: true };
 }
@@ -221,7 +225,7 @@ export function tickReflectProgress(state) {
 // reflect完了時に呼ぶ: 残っている分の繋がりを生成し、bond/フォーカスを付与
 export function resolveReflect(state) {
   if (!state.reflect) return null;
-  const { ms, plannedEdges = 1, addedEdges = 0 } = state.reflect;
+  const { ms, plannedEdges = 1, addedEdges = 0, sparksClaimed = 0 } = state.reflect;
   const minutes = ms / 60_000;
   let added = addedEdges;
   while (added < plannedEdges) {
@@ -232,9 +236,30 @@ export function resolveReflect(state) {
   const focusGain = Math.max(1, Math.round(minutes / 3));
   applyEffects(state, { bond: bondGain, focus: focusGain });
   state.focusCap = Math.min(200, state.focusCap); // 安全弁
-  const summary = { edgesAdded: added, bondGain, focusGain, minutes };
+  const summary = { edgesAdded: added, bondGain, focusGain, minutes, sparksClaimed };
   state.reflect = null;
   return summary;
+}
+
+// --- 内省ミニゲーム「気づきの粒」 ---
+// 一定間隔で画面に浮かぶ粒が出現するタイミングかどうかを判定する。呼ぶたびに次回時刻を更新。
+export function maybeSpawnReflectSpark(state) {
+  if (!state.reflect) return false;
+  if (Date.now() < state.reflect.nextSparkAt) return false;
+  state.reflect.nextSparkAt = Date.now() + randomBetween(3000, 6000);
+  return true;
+}
+
+const SPARK_BONUS_FOCUS = 2;
+const SPARK_BONUS_BOND = 1;
+
+// 粒をクリック(タップ)できた時の報酬。基礎分(plannedEdges)とは別枠のボーナスとして繋がりを追加する。
+export function claimReflectSpark(state) {
+  if (!state.reflect) return null;
+  const pair = addRandomEdge(state);
+  state.reflect.sparksClaimed = (state.reflect.sparksClaimed || 0) + 1;
+  applyEffects(state, { focus: SPARK_BONUS_FOCUS, bond: SPARK_BONUS_BOND });
+  return { pair, focusGain: SPARK_BONUS_FOCUS, bondGain: SPARK_BONUS_BOND };
 }
 
 const PAT_COOLDOWN_MS = 4000;

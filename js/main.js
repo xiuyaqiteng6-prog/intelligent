@@ -3,7 +3,7 @@
 import { GraphView } from './graph.js';
 import { UI, bindOnboarding } from './ui.js';
 import {
-  createNewState, loadState, saveState, reconcileOffline, getStageInfo,
+  createNewState, loadState, saveState, reconcileOffline, getStageInfo, maybeSpawnReflectSpark,
 } from './state.js';
 import { maybeTriggerEvent } from './events.js';
 
@@ -69,6 +69,8 @@ function startLoops() {
     const resolved = ui.tickReflect();
     if (resolved) checkEvolution();
 
+    if (maybeSpawnReflectSpark(state)) ui.spawnReflectSpark();
+
     if (maybeTriggerEvent(state)) ui.showEventModal();
 
     saveThrottled(false);
@@ -96,7 +98,10 @@ function boot() {
   });
 }
 
-if ('serviceWorker' in navigator) {
+// Electron(デスクトップアプリ)は全ファイルがローカルにあるためService Workerは不要。
+// 古いキャッシュが残ってアップデート時に混乱の元になるのを避けるため、ここでは登録しない。
+const isElectron = navigator.userAgent.includes('Electron');
+if ('serviceWorker' in navigator && !isElectron) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
