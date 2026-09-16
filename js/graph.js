@@ -3,6 +3,18 @@
 import { CATEGORIES } from './data.js';
 
 const CORE_COLOR = '#c9b6ff';
+const STAT_KEYS = ['logic', 'creativity', 'empathy', 'curiosity', 'discipline'];
+
+function mixColor(hexA, hexB, t) {
+  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  return {
+    r: Math.round(ar + (br - ar) * t),
+    g: Math.round(ag + (bg - ag) * t),
+    b: Math.round(ab + (bb - ab) * t),
+  };
+}
 
 export class GraphView {
   constructor(canvas, state) {
@@ -118,6 +130,18 @@ export class GraphView {
   _radius(n) {
     if (n.category === 'core') return 22;
     return 9 + Math.min(6, (n.mastery || 1) * 1.2);
+  }
+
+  // 最も高い能力に応じて、コアの色をそのカテゴリ色にわずかに寄せる(育成傾向の可視化)
+  _coreColorRGB() {
+    const stats = this.state.stats;
+    if (!stats) return mixColor(CORE_COLOR, CORE_COLOR, 0);
+    let best = STAT_KEYS[0];
+    for (const k of STAT_KEYS) if (stats[k] > stats[best]) best = k;
+    const avg = STAT_KEYS.reduce((s, k) => s + stats[k], 0) / STAT_KEYS.length;
+    const spread = Math.max(0, stats[best] - avg);
+    const blend = Math.min(0.55, spread / 45);
+    return mixColor(CORE_COLOR, CATEGORIES[best].color, blend);
   }
 
   focusOn(id) {
@@ -236,8 +260,9 @@ export class GraphView {
         ctx.strokeStyle = `rgba(201,182,255,${0.25 + fade * 0.65})`;
       } else {
         const highlight = this.filterCategory && (a.category === this.filterCategory || b.category === this.filterCategory);
-        ctx.lineWidth = 1 / this.camera.scale;
-        ctx.strokeStyle = highlight ? 'rgba(200,182,255,0.55)' : 'rgba(150,150,170,0.18)';
+        const strengthWidth = 0.6 + Math.min(3, e.strength || 1) * 0.55;
+        ctx.lineWidth = strengthWidth / this.camera.scale;
+        ctx.strokeStyle = highlight ? 'rgba(200,182,255,0.55)' : 'rgba(150,150,170,0.22)';
       }
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -246,18 +271,31 @@ export class GraphView {
     }
 
     // ノード
+    const coreRGB = this._coreColorRGB();
+    const coreColorStr = `rgb(${coreRGB.r},${coreRGB.g},${coreRGB.b})`;
     for (const n of this.state.nodes) {
       const dimmed = this.filterCategory && n.category !== 'core' && n.category !== this.filterCategory;
-      const color = n.category === 'core' ? CORE_COLOR : (CATEGORIES[n.category]?.color || '#999');
+      const color = n.category === 'core' ? coreColorStr : (CATEGORIES[n.category]?.color || '#999');
       const r = this._radius(n);
       const selected = n.id === this.selectedId;
+      const mastery = n.mastery || 1;
 
       if (n.category === 'core') {
         const pulse = 1 + Math.sin(t / 700) * 0.05;
         const glowR = r * 2.4 * pulse;
         const grad = ctx.createRadialGradient(n.x, n.y, r * 0.3, n.x, n.y, glowR);
-        grad.addColorStop(0, 'rgba(201,182,255,0.35)');
-        grad.addColorStop(1, 'rgba(201,182,255,0)');
+        grad.addColorStop(0, `rgba(${coreRGB.r},${coreRGB.g},${coreRGB.b},0.35)`);
+        grad.addColorStop(1, `rgba(${coreRGB.r},${coreRGB.g},${coreRGB.b},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (mastery >= 3) {
+        // よく「深めた」ノートは柔らかく光る
+        const glowR = r * 1.8;
+        const grad = ctx.createRadialGradient(n.x, n.y, r * 0.4, n.x, n.y, glowR);
+        grad.addColorStop(0, `${color}55`);
+        grad.addColorStop(1, `${color}00`);
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
@@ -269,6 +307,11 @@ export class GraphView {
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
+      if (mastery >= 3 && n.category !== 'core') {
+        ctx.lineWidth = 1.5 / this.camera.scale;
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.stroke();
+      }
       if (selected) {
         ctx.lineWidth = 2 / this.camera.scale;
         ctx.strokeStyle = '#ffffff';

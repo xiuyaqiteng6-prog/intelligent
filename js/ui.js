@@ -5,6 +5,7 @@ import {
   totalLearnedNodes, getStageInfo, focusCost, feedKnowledge,
   REFLECT_OPTIONS, startReflect, reflectRemainingMs, resolveReflect, tickReflectProgress,
   patCore, applyEffects, saveState, claimReflectSpark,
+  deepenNode, deepenCost, MAX_MASTERY, MAX_NODE_DEGREE,
 } from './state.js';
 import { generateReply } from './dialogue.js';
 import { resolveEvent } from './events.js';
@@ -44,12 +45,23 @@ function formatDuration(ms) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+const MASTERY_NOTES = [
+  '',
+  '',
+  'まだ触れたばかりの、浅い理解。',
+  '何度も立ち返り、少しずつ輪郭がはっきりしてきた。',
+  'すっかり馴染んで、他の記憶とも深く結びついている。',
+  'この意識の核と言ってもいいほど、深く根を張った概念。',
+];
+
 function describeNode(node) {
   if (node.category === 'core') {
     return `これはこの意識の核——すべてのノートはここから伸びていく。まだ名前と可能性しか持たない、始まりの一点。`;
   }
   const cat = CATEGORIES[node.category];
-  return `「${node.label}」という概念を学んだ。${cat.desc}の一部として、他の記憶と少しずつ結びついている。`;
+  const mastery = node.mastery || 1;
+  const extra = MASTERY_NOTES[mastery] ? ` ${MASTERY_NOTES[mastery]}` : '';
+  return `「${node.label}」という概念を学んだ。${cat.desc}の一部として、他の記憶と少しずつ結びついている。${extra}`;
 }
 
 // オンボーディング画面のバインド(ゲーム開始前、UIインスタンス生成前に呼び出す)
@@ -461,12 +473,31 @@ export class UI {
       .map((e) => (e.a === node.id ? e.b : e.a))
       .map((id) => s.nodes.find((n) => n.id === id))
       .filter(Boolean);
+    const mastery = node.mastery || 1;
+
+    let deepenHtml = '';
+    if (node.category !== 'core') {
+      const dots = Array.from({ length: MAX_MASTERY }, (_, i) => (i < mastery ? '●' : '○')).join('');
+      const maxed = mastery >= MAX_MASTERY;
+      const cost = deepenCost(node);
+      const canAfford = s.focusPoints >= cost;
+      deepenHtml = `
+        <div class="mastery-row">
+          <span class="mastery-dots" style="color:${cat.color}">${dots}</span>
+          <span class="mastery-label">習熟度 ${mastery}/${MAX_MASTERY}</span>
+        </div>
+        <button id="btn-deepen" type="button" class="btn-secondary deepen-btn" ${maxed || !canAfford ? 'disabled' : ''}>
+          ${maxed ? 'これ以上は深まらない' : `深める(◆ ${cost})`}
+        </button>
+      `;
+    }
 
     panel.innerHTML = `
       <div class="note-category">${node.category === 'core' ? 'コア意識' : cat.label}</div>
       <h2><span class="note-badge" style="background:${cat ? cat.color : 'var(--accent)'}"></span>${node.label}</h2>
       <div class="note-desc">${describeNode(node)}</div>
-      <div class="note-meta">習得日: ${new Date(node.createdAt).toLocaleDateString('ja-JP')} ・ つながり: ${connections.length}</div>
+      <div class="note-meta">習得日: ${new Date(node.createdAt).toLocaleDateString('ja-JP')} ・ つながり: ${connections.length}${node.category !== 'core' ? `/${MAX_NODE_DEGREE}` : ''}</div>
+      ${deepenHtml}
       <ul class="conn-list"></ul>
     `;
     const connList = panel.querySelector('.conn-list');
@@ -480,6 +511,20 @@ export class UI {
         this.renderNotePanel();
       });
       connList.appendChild(li);
+    }
+
+    const deepenBtn = document.getElementById('btn-deepen');
+    if (deepenBtn) {
+      deepenBtn.addEventListener('click', () => {
+        const res = deepenNode(s, node.id);
+        if (res.ok) {
+          this.graph.spawnSparkles(node.x, node.y, 10);
+          this.showFloatingMessage(`「${node.label}」の理解が深まった`);
+          this.renderNotePanel();
+          this.renderTopbar();
+          this.markChanged();
+        }
+      });
     }
   }
 

@@ -13,6 +13,8 @@ export const REFLECT_OPTIONS = [
   { key: '8h', label: '8時間(おやすみ)', ms: 8 * 60 * 60_000 },
 ];
 const OFFLINE_CAP_MS = 12 * 60 * 60_000; // オフライン進行の上限 12時間
+export const MAX_NODE_DEGREE = 4; // 通常ノード1つにつながる線の本数上限(物理演算が破綻しないように)。コアは対象外。
+export const MAX_MASTERY = 5;
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
@@ -105,6 +107,20 @@ export function applyEffects(state, effects) {
   }
 }
 
+export function nodeDegree(state, nodeId) {
+  let count = 0;
+  for (const e of state.edges) {
+    if (e.a === nodeId || e.b === nodeId) count++;
+  }
+  return count;
+}
+
+// coreは何本繋がっても良い(ハブとして意図的に無制限)。それ以外は上限まで。
+function hasRoomForEdge(state, nodeId) {
+  if (nodeId === 'core') return true;
+  return nodeDegree(state, nodeId) < MAX_NODE_DEGREE;
+}
+
 export function dominantTrait(state) {
   const keys = ['logic', 'creativity', 'empathy', 'curiosity', 'discipline'];
   let best = keys[0];
@@ -156,15 +172,38 @@ export function feedKnowledge(state, categoryKey) {
 
   // コアへ接続
   state.edges.push({ a: 'core', b: id, strength: 1 });
-  // 同カテゴリの既存ノードへ確率的に接続してクラスタを作る
-  if (sameCatNodes.length > 0 && Math.random() < 0.6) {
-    const target = sameCatNodes[Math.floor(Math.random() * sameCatNodes.length)];
+  // 同カテゴリの既存ノードへ確率的に接続してクラスタを作る(上限に余裕があるノードのみ)
+  const connectable = sameCatNodes.filter((n) => hasRoomForEdge(state, n.id));
+  if (connectable.length > 0 && Math.random() < 0.6) {
+    const target = connectable[Math.floor(Math.random() * connectable.length)];
     state.edges.push({ a: target.id, b: id, strength: 1 });
   }
 
   applyEffects(state, { [categoryKey]: 3, bond: 1 });
   state.totalFed += 1;
   return { ok: true, node };
+}
+
+export function deepenCost(node) {
+  return 5 + (node.mastery || 1) * 3;
+}
+
+// 既存のノートを「深める」。集中力を使って習熟度を上げ、見た目(大きさ・輝き・線の太さ)にも反映される。
+export function deepenNode(state, nodeId) {
+  const node = state.nodes.find((n) => n.id === nodeId);
+  if (!node || node.category === 'core') return { ok: false, reason: 'invalid' };
+  const mastery = node.mastery || 1;
+  if (mastery >= MAX_MASTERY) return { ok: false, reason: 'max' };
+  const cost = deepenCost(node);
+  if (state.focusPoints < cost) return { ok: false, reason: 'focus', cost };
+
+  state.focusPoints -= cost;
+  node.mastery = mastery + 1;
+  for (const e of state.edges) {
+    if (e.a === nodeId || e.b === nodeId) e.strength = Math.min(3, (e.strength || 1) + 0.4);
+  }
+  applyEffects(state, { [node.category]: 2, bond: 1 });
+  return { ok: true, node, cost };
 }
 
 export function startReflect(state, ms) {
@@ -187,9 +226,10 @@ export function reflectRemainingMs(state) {
 }
 
 // ランダムな未接続ペアを1組つなげる。繋がったノードのラベルを返す(繋げられなければnull)。
+// 次数上限(MAX_NODE_DEGREE)に余裕がある組み合わせだけを対象にする。
 function addRandomEdge(state) {
-  const nodeIds = state.nodes.map((n) => n.id);
-  if (nodeIds.length < 3) return null;
+  const nodeIds = state.nodes.map((n) => n.id).filter((id) => hasRoomForEdge(state, id));
+  if (nodeIds.length < 2) return null;
   let attempts = 0;
   while (attempts < 40) {
     attempts++;
