@@ -23,7 +23,11 @@ export function loadLLMSettings() {
 }
 
 export function saveLLMSettings(settings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('LLM設定の保存に失敗しました', e);
+  }
 }
 
 function normalizeBaseUrl(baseUrl) {
